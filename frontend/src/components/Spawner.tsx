@@ -35,7 +35,7 @@ export const Spawner = ({
           ...elem,
           progress: elem.progress + delta / duration,
         }))
-        .filter((elem) => elem.progress < 1),
+        .filter((elem) => elem.progress < 1)
     );
   });
 
@@ -45,7 +45,7 @@ export const Spawner = ({
         const position = new THREE.Vector3().lerpVectors(
           startPosition,
           endPosition,
-          elem.progress,
+          elem.progress
         );
         return (
           <group key={elem.id} position={position}>

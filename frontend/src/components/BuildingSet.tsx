@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { MathUtils } from "three";
 import { BUILDING_SETS } from "../utils/BuildingSets";
-import { radians, randExp } from "../utils";
+import { radians } from "../utils";
 import { Building } from "./Building";
 import { FLOOR_HEIGHT } from "../constants/constants";
 
@@ -13,17 +13,9 @@ export const BuildingSet = ({
   maxHeight?: number;
 }) => {
   const [buildingSetIndex, setBuildingSetIndex] = useState<number>(0);
-  const [floors, setFloors] = useState<number[]>([]);
 
   useEffect(() => {
     setBuildingSetIndex(MathUtils.randInt(0, BUILDING_SETS.length - 1));
-
-    setFloors(
-      BUILDING_SETS[buildingSetIndex].map(() => {
-        const randHeight = randExp(minHeight, maxHeight, 7);
-        return Math.floor(randHeight);
-      }),
-    );
   }, []);
 
   return (
@@ -35,14 +27,13 @@ export const BuildingSet = ({
               position.map((pos) => pos * 2) as [number, number, number]
             }
             size={[width * 2, length * 2]}
-            floors={floors[i]}
+            floors={1} // Always one floor
           />
-          {/* Add a translucent black plane that is the same size as the parking lot */}
-
+          {/* Add a translucent black plane that is the same size as the building footprint */}
           <mesh
             position={[
               position[0] * 2,
-              FLOOR_HEIGHT * (floors[i] - 1), // Adjust the y-position to the top of the building
+              FLOOR_HEIGHT * (1 - 1), // 0, since there's only one floor
               position[2] * 2,
             ]}
             rotation={[radians(-90), 0, 0]} // Rotate the plane to align with the ground
@@ -55,3 +46,4 @@ export const BuildingSet = ({
     </group>
   );
 };
+

@@ -1,3 +1,4 @@
+
 import { FLOOR_HEIGHT } from "../constants/constants";
 import { Square, SquareProps } from "./Square";
 
@@ -5,7 +6,7 @@ interface BuildingProps extends SquareProps {
   floors?: number;
 }
 
-export const Building = ({ position, size, floors = 3 }: BuildingProps) => {
+export const Building = ({ position, size, floors = 1 }: BuildingProps) => {
   return (
     <>
       {Array.from({ length: floors }, (_, index) => (
@@ -23,3 +24,4 @@ export const Building = ({ position, size, floors = 3 }: BuildingProps) => {
     </>
   );
 };
+
