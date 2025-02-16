@@ -1,10 +1,10 @@
-import { Color, useFrame } from "@react-three/fiber";
+import { Color } from "@react-three/fiber";
 import { Euler, MathUtils, Vector3 } from "three";
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { getRamdomComment } from "../utils/comments";
 import { Box, Html } from "@react-three/drei";
 import { radians } from "../utils";
-import { BlinkingParkingSlot } from "./BlinkingParking";
+import { BlinkingParkingSlot } from "./BlinkingParkingSlot";
 import { GradientPlane } from "./GradientPlane";
 
 interface CarProps {
@@ -18,8 +18,7 @@ interface CarProps {
 }
 
 export const Car: React.FC<CarProps> = ({
-  // Remove the default color so every car gets a random color
-  color,
+  color = "#fff",
   position = new Vector3(0, 0, 0),
   forward = true,
   trail = true,
@@ -32,18 +31,15 @@ export const Car: React.FC<CarProps> = ({
   ]);
 
   useEffect(() => {
-    const newSize =
-      size || [
-        MathUtils.randFloat(1.9, 2.3), // width
-        MathUtils.randFloat(0.3, 0.5), // height
-        MathUtils.randFloat(4, 5.6), // length
-      ];
+    const newSize = size || [
+      MathUtils.randFloat(1.9, 2.3),
+      0.1,
+      MathUtils.randFloat(4, 5.6),
+    ];
     setVehicleSize(newSize);
   }, [size]);
 
-  const [randomComment, setRandomComment] = useState(() =>
-    getRamdomComment()
-  );
+  const [randomComment, setRandomComment] = useState(() => getRamdomComment());
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -54,66 +50,22 @@ export const Car: React.FC<CarProps> = ({
     };
   }, []);
 
-  // Generate a random color for each Car instance
-  const getRandomColor = (): string =>
-    "#" +
-    Math.floor(Math.random() * 16777215)
-      .toString(16)
-      .padStart(6, "0");
-
-  const carColor = useMemo(() => getRandomColor(), []);
-
-  // Create a ref for the group to apply the bobbing animation
-  const carGroupRef = useRef<THREE.Group>(null);
-
-  useFrame(({ clock }) => {
-    if (carGroupRef.current) {
-      // Bobbing effect: adjust frequency and amplitude as desired
-      const bobbing = Math.sin(clock.elapsedTime * 3) * 0.2;
-      carGroupRef.current.position.y = position.y + bobbing;
-    }
-  });
-
-  // Destructure vehicle size for easy reference
-  const [width, height, length] = vehicleSize;
-  // Define cabin detail dimensions (adjust as needed)
-  const cabinWidth = width * 0.8;
-  const cabinHeight = height * 0.6;
-  const cabinLength = length * 0.3;
-
   return (
     <>
-      <group ref={carGroupRef} position={position}>
-        {/* Main Car Body */}
-        <Box
-          position={[0, height / 2, 0]}
-          rotation={[radians(0), radians(90), 0]}
-          args={vehicleSize}
-        >
-          <meshStandardMaterial
-            attach="material"
-            color={carColor}
-            metalness={0.5}
-            roughness={0.4}
-          />
-        </Box>
-        {/* Cabin Detail */}
-        <Box
-          position={[0, height + cabinHeight / 2, 0]}
-          args={[cabinWidth, cabinHeight, cabinLength]}
-        >
-          <meshStandardMaterial
-            attach="material"
-            color="#ffffff"
-            metalness={0.2}
-            roughness={0.5}
-          />
-        </Box>
-      </group>
+      <Box
+        position={position}
+        rotation={[radians(0), radians(90), 0]}
+        args={vehicleSize}
+      >
+        <meshBasicMaterial color={color} />
+      </Box>
+      {searching ? (
+        <>
+          <BlinkingParkingSlot position={[0, 2, 0]} />
+        </>
+      ) : null}
 
-      {searching && <BlinkingParkingSlot position={[0, 2, 0]} />}
-
-      {comment && (
+      {comment ? (
         <Html
           position={[0, 10, 0]}
           center
@@ -135,10 +87,9 @@ export const Car: React.FC<CarProps> = ({
             {randomComment}
           </div>
         </Html>
-      )}
-
-      {trail &&
-        (forward ? (
+      ) : null}
+      {trail ? (
+        forward ? (
           <GradientPlane
             position={new Vector3(vehicleSize[2] / 1.3, -0.02, position.z)}
             size={[3, 2]}
@@ -149,8 +100,8 @@ export const Car: React.FC<CarProps> = ({
             position={new Vector3(-(vehicleSize[2] / 1.3), -0.02, position.z)}
             size={[3, vehicleSize[0]]}
           />
-        ))}
+        )
+      ) : null}
     </>
   );
 };
-;
