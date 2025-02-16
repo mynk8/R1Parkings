@@ -25,8 +25,7 @@ type SensorData struct {
 	RfidSensors []RfidSensor `json:"rfid_sensors"`
 }
 
-// Websocket broadcast hub: PUB/SUB
-
+// Websocket broadcast hub for live clients
 type Hub struct {
 	clients    map[*websocket.Conn]bool
 	broadcast  chan SensorData
@@ -54,14 +53,14 @@ func (h *Hub) run() {
 			log.Println("Live client connected to the service")
 		case conn := <-h.unregister:
 			h.mu.Lock()
-			h.clients[conn] = false
+			delete(h.clients, conn)
 			h.mu.Unlock()
 			log.Println("Live client disconnected")
 		case data := <-h.broadcast:
 			h.mu.Lock()
 			for client := range h.clients {
 				if err := client.WriteJSON(data); err != nil {
-					log.Printf("Error writing to live client %v", err)
+					log.Printf("Error writing to live client: %v", err)
 					client.Close()
 					delete(h.clients, client)
 				}
@@ -75,43 +74,37 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// sensorIngestHandler now accepts HTTP POST with JSON payload from the ESP32.
 func sensorIngestHandler(dbPool *pgxpool.Pool, hub *Hub, w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("Ingest WS upgrade error: %v", err)
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	defer conn.Close()
-	log.Printf("Sensor device connected from %s", r.RemoteAddr)
 
-	// Continuously read messages from the sensor device.
-	for {
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("Error reading from sensor WS: %v", err)
-			return
-		}
-
-		var data SensorData
-		if err := json.Unmarshal(message, &data); err != nil {
-			log.Printf("JSON unmarshal error: %v", err)
-			continue
-		}
-
-		// Store the sensor data in TimescaleDB.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := insertSensorData(ctx, dbPool, data); err != nil {
-			log.Printf("DB insertion error: %v", err)
-		} else {
-			log.Printf("Stored sensor data from device %s at %s", data.DeviceID, data.Timestamp.Format(time.RFC3339))
-		}
-		cancel()
-
-		// Broadcast the sensor data to all connected live clients.
-		hub.broadcast <- data
+	var data SensorData
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, "Bad Request: "+err.Error(), http.StatusBadRequest)
+		return
 	}
+
+	// Insert the sensor data into TimescaleDB.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := insertSensorData(ctx, dbPool, data); err != nil {
+		log.Printf("DB insertion error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Stored sensor data from device %s at %s", data.DeviceID, data.Timestamp.Format(time.RFC3339))
+
+	// Broadcast the sensor data to all connected live clients.
+	hub.broadcast <- data
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Data ingested successfully"))
 }
 
+// liveDataHandler remains a websocket endpoint for live updates.
 func liveDataHandler(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -161,12 +154,12 @@ func main() {
 	go hub.run()
 
 	// 3. Set up HTTP endpoints.
-	// Endpoint for sensor ingestion.
+	// Endpoint for sensor ingestion (HTTP POST from ESP32).
 	http.HandleFunc("/ws/ingest", func(w http.ResponseWriter, r *http.Request) {
 		sensorIngestHandler(dbPool, hub, w, r)
 	})
 
-	// Endpoint for frontend live updates.
+	// Endpoint for frontend live updates (WebSocket).
 	http.HandleFunc("/ws/live", func(w http.ResponseWriter, r *http.Request) {
 		liveDataHandler(hub, w, r)
 	})
