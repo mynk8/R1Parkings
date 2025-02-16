@@ -9,10 +9,9 @@ import {
   roadColor,
 } from "../constants/constants";
 import * as THREE from "three";
-import { Square } from "../components/Square";
 import { Car } from "../components/Car";
-import { Building } from "../components/Building";
 import { BuildingSet } from "../components/BuildingSet";
+import { RoadStripes } from "./RoadStripes";
 
 export const CarScene = ({
   children,
@@ -30,7 +29,8 @@ export const CarScene = ({
   return (
     <Canvas
       style={{
-        background: "linear-gradient(to top right, #C08427, #5D4037)",
+        background:
+          "linear-gradient(to top right, #0D0D0D, #666666)",
       }}
     >
       {camera || (
@@ -43,14 +43,19 @@ export const CarScene = ({
           rotation={[radians(60), 0, 0]}
         />
       )}
+
+      {/* Add lighting */}
+      <ambientLight intensity={0.5} />
+      <directionalLight intensity={0.8} position={[10, 10, 5]} />
+      {/* You can also experiment with additional lights if needed */}
+      {/* <pointLight intensity={0.7} position={[0, 50, 50]} /> */}
+
       {children}
 
       {orbitControls ? (
         <OrbitControls
           minPolarAngle={radians(0)}
           maxPolarAngle={radians(30)}
-          //   minAzimuthAngle={radians(0)}
-          //   maxAzimuthAngle={radians(270)}
           minDistance={30}
           maxDistance={180}
         />
@@ -58,16 +63,24 @@ export const CarScene = ({
 
       {/* Road */}
 
-      <Plane
-        args={[1000, 24]}
-        position={[0, -0.2, 0]}
-        rotation={[radians(-90), 0, 0]}
-      >
-        <meshBasicMaterial color={roadColor} />
-      </Plane>
+
+      <group>
+        {/* Road base */}
+        <Plane
+          args={[1000, 24]}
+          position={[0, -0.2, 0]}
+          rotation={[radians(-90), 0, 0]}
+        >
+          <meshBasicMaterial color={roadColor} />
+        </Plane>
+
+        {/* Moving road stripes */}
+        <RoadStripes />
+      </group>
+
+
 
       {/* Cars */}
-
       <Spawner
         spawnInterval={8.2}
         duration={WORLD_DURATION - 6}
@@ -92,7 +105,6 @@ export const CarScene = ({
       >
         <Car forward={false} />
       </Spawner>
-
       <Spawner
         spawnInterval={9.8}
         duration={WORLD_DURATION - 18}
@@ -115,8 +127,24 @@ export const CarScene = ({
       </group>
 
       {/* Buildings Left */}
-
+      <Spawner
+        spawnInterval={3.6}
+        duration={WORLD_DURATION}
+        startPosition={new THREE.Vector3(WORLD_START, 0, 76)}
+        endPosition={new THREE.Vector3(WORLD_END, 0, 76)}
+      >
+        <BuildingSet />
+      </Spawner>
       {/* Buildings Right */}
+      <Spawner
+        spawnInterval={3.6}
+        duration={WORLD_DURATION}
+        startPosition={new THREE.Vector3(WORLD_START, 0, -76)}
+        endPosition={new THREE.Vector3(WORLD_END, 0, -76)}
+      >
+        <BuildingSet />
+      </Spawner>
     </Canvas>
   );
 };
+

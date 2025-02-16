@@ -38,6 +38,7 @@ main {
   font-size: 2rem; /* Adjust as needed */
   font-weight: 900;
   display: flex;
+  border-radius: 0;
   flex-direction: column;
   gap: 8px;
   position: relative;
@@ -53,7 +54,7 @@ main {
   padding: 8px 12px;
   background-color: #007bff; /* Adjust to match your theme */
   color: white;
-  border-radius: 8px;
+  border-radius: 0px;
 }
 
 /* Search button */

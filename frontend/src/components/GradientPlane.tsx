@@ -23,7 +23,7 @@ export const GradientPlane = ({
     }
 
     const gradient = ctx.createLinearGradient(0, 0, 256, 0);
-    gradient.addColorStop(0, "green");
+    gradient.addColorStop(0, "gray");
     gradient.addColorStop(1, roadColor);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 256, 256);

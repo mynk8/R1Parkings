@@ -8,7 +8,7 @@ export default function App() {
         <CarScene />
       </div>
       <div className="heading">
-        <div className="bg-primary">Need</div>
+        <div className="bg-primary ">Need</div>
         <div className="bg-primary">parking?</div>
       </div>
     </main>
