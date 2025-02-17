@@ -1,176 +1,138 @@
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <Wire.h>
-#include <ArduinoJson.h>
-#include <MFRC522.h>
 #include <SPI.h>
-#include <time.h>
+#include <MFRC522.h>
+#include <ArduinoJson.h>
+#include <WiFi.h>
+#include <WebSocketsClient.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 
+#define RST_PIN         4  // Common RST
+#define SDA_1_PIN       5  // SDA 1 pin
+#define SDA_2_PIN       17 // SDA 2 pin
+#define SDA_3_PIN       16 // SDA 3 pin
 
-const char* ssid = "SSID";
-const char* password = "PWD";
+#define NR_OF_READERS   3
 
-const char* serverHost = "http://192.168.1.50:5000/ws/ingest";
+byte ssPins[] = {SDA_1_PIN, SDA_2_PIN, SDA_3_PIN};
 
+MFRC522 mfrc522[NR_OF_READERS];
+MFRC522::MIFARE_Key key;
 
-#define SS_1  5  // RFID 1
-#define SS_2  17 // RFID 2
-#define SS_3  16 // RFID 3
-#define RST_PIN 4 // Common Reset
+// Wi-Fi and WebSocket setup
+const char* ssid = "Arjun";
+const char* password = "9354318837";
+WiFiClient wifiClient;
+WebSocketsClient webSocket;
 
-
-MFRC522 rfid1(SS_1, RST_PIN);
-MFRC522 rfid2(SS_2, RST_PIN);
-MFRC522 rfid3(SS_3, RST_PIN);
-
-
-WiFiClient client;
-HTTPClient http;
-
-
-struct RfidSensor {
-  int sensorID;
-  bool tagDetected;
-  String tagID;
-};
-
-
-void initRFID(MFRC522 &rfid, int ss_pin) {
-  pinMode(ss_pin, OUTPUT);
-  digitalWrite(ss_pin, HIGH);
-  delay(100);
-  rfid.PCD_Init();
-  Serial.print("RC522 Initialized on SS: ");
-  Serial.println(ss_pin);
-}
-
-
-void deselectAllRFID() {
-    digitalWrite(SS_1, HIGH);
-    digitalWrite(SS_2, HIGH);
-    digitalWrite(SS_3, HIGH);
-}
-
-
-String readRFID(MFRC522 &rfid, int ss_pin) {
-  deselectAllRFID();
-  digitalWrite(ss_pin, LOW);
-  delay(50);
-
-  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
-    digitalWrite(ss_pin, HIGH);
-    return "";
-  }
-
-  String tagID = "";
-  for (byte i = 0; i < rfid.uid.size; i++) {
-    tagID += String(rfid.uid.uidByte[i], HEX);
-  }
-
-  tagID.toUpperCase();
-  rfid.PICC_HaltA();
-  rfid.PCD_StopCrypto1();
-  digitalWrite(ss_pin, HIGH);
-  return tagID;
-}
-
-
-
-String getTimestamp() {
-  time_t now;
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Time FAIL");
-    return "";
-  }
-  char buffer[25];
-  strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
-  return String(buffer);
-}
-
-
-
-void sendSensorData() {
-  if (WiFi.status() == WL_CONNECTED) {
-    http.begin(serverHost);
-    http.addHeader("Content-Type", "application/json");
-
-    StaticJsonDocument<512> doc;
-    doc["device_id"] = "ESP32-001";
-    doc["timestamp"] = getTimestamp();
-
-    JsonArray sensorsArray = doc.createNestedArray("rfid_sensors");
-
-    RfidSensor sensors[3] = {
-      {1, false, ""},
-      {2, false, ""},
-      {3, false, ""}
-    };
-
-    sensors[0].tagID = readRFID(rfid1, SS_1);
-    sensors[1].tagID = readRFID(rfid2, SS_2);
-    sensors[2].tagID = readRFID(rfid3, SS_3);
-
-    for (int i = 0; i < 3; i++) {
-      if (sensors[i].tagID != "") {
-        sensors[i].tagDetected = true;
-      }
-
-      JsonObject sensorObj = sensorsArray.createNestedObject();
-      sensorObj["sensor_id"] = sensors[i].sensorID;
-      sensorObj["tag_detected"] = sensors[i].tagDetected;
-      if (sensors[i].tagDetected) {
-        sensorObj["tag_id"] = sensors[i].tagID;
-      }
-    }
-
-    String jsonString;
-    serializeJson(doc, jsonString);
-    Serial.println("Sending JSON Data:");
-    Serial.println(jsonString);
-
-    int httpResponseCode = http.POST(jsonString);
-
-    if (httpResponseCode > 0) {
-      Serial.println("Response: " + http.getString());
-    } else {
-      Serial.println("Error sending request: " + String(httpResponseCode));
-    }
-
-    http.end();
-  } else {
-    Serial.println("WiFi DOWN");
-  }
-}
-
-
+WiFiUDP udp;
+NTPClient timeClient(udp, "pool.ntp.org", 19800, 60000);
 
 void setup() {
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(250);
-    Serial.print(".");
+  for (byte i = 0; i < 6; i++) {
+    key.keyByte[i] = 0xFF;
   }
-  Serial.println("\nWiFi UP");
 
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  delay(2000);
-  Serial.println("Time UP");
+  Serial.begin(115200);
+  while (!Serial);
 
   SPI.begin();
-  initRFID(rfid1, SS_1);
-  initRFID(rfid2, SS_2);
-  initRFID(rfid3, SS_3);
 
-  Serial.println("System UP");
+  // Initialize RFID
+  for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
+    mfrc522[reader].PCD_Init(ssPins[reader], RST_PIN);
+    Serial.print(F("Reader "));
+    Serial.print(reader);
+    Serial.print(F(": "));
+  }
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(200);
+    Serial.print(".");
+
+  }
+  Serial.println("WiFi UP");
+
+  // Connect to server (initial attempt)
+  webSocket.begin("192.168.1.50", 8000, "/ws/live");
+
+  // Start NTP
+  timeClient.begin();
+  timeClient.update();
+  Serial.println("Time UP");
 }
 
-
-
 void loop() {
-  sendSensorData();
-  delay(500);
-  Serial.println("Data PUSHED");
+  timeClient.update();
+  String timestamp = timeClient.getFormattedTime();  // Get formatted time
+
+  StaticJsonDocument<512> doc;
+  doc["device_id"] = "ESP32-001";
+  doc["timestamp"] = timestamp;
+
+  JsonArray rfid_sensors = doc.createNestedArray("rfid_sensors");
+
+  for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
+    JsonObject sensor = rfid_sensors.createNestedObject();
+    sensor["sensor_id"] = reader + 1;
+
+    bool tagDetected = false;
+
+    if (mfrc522[reader].PICC_ReadCardSerial()) {
+      tagDetected = true;
+
+      sensor["tag_detected"] = true;
+
+      // Read DATA
+      String plate_number = "Unknown";
+      byte block = 4;
+      byte buffer[18];
+      byte bufferSize = sizeof(buffer);
+
+      MFRC522::StatusCode status = mfrc522[reader].PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, block, &key, &mfrc522[reader].uid);
+      if (status == MFRC522::STATUS_OK) {
+        status = mfrc522[reader].MIFARE_Read(block, buffer, &bufferSize);
+        if (status == MFRC522::STATUS_OK) {
+          plate_number = extract_printable_characters(buffer, bufferSize);
+        }
+      }
+      sensor["plate_number"] = plate_number;
+    }
+    else {
+      // If no card, mark false
+      sensor["tag_detected"] = false;
+    }
+
+    // Halt card
+    mfrc522[reader].PICC_HaltA();
+    // Stop encryption
+    mfrc522[reader].PCD_StopCrypto1();
+  }
+
+  // Only send data if WebSocket is connected
+  if (webSocket.isConnected()) {
+    String jsonString;
+    serializeJson(doc, jsonString);
+    webSocket.sendTXT(jsonString);
+  }
+  else {
+    // Attempt to reconnect
+    Serial.println("SERVER disconnected, reconnecting...");
+    webSocket.begin("192.168.1.50", 8000, "/ws/live");
+  }
+
+  delay(1000);
+}
+
+String extract_printable_characters(byte* buffer, byte bufferSize) {
+  String result = "";
+  for (byte i = 0; i < bufferSize; i++) {
+    if (buffer[i] >= 32 && buffer[i] <= 126) {
+      result += (char)buffer[i];
+    }
+    else {
+      break;
+    }
+  }
+  return result;
 }
