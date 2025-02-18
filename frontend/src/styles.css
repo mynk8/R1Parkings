@@ -50,9 +50,10 @@ main {
 
 /* Background blocks */
 .bg-primary {
+  font-weight: 450;
   display: inline-block;
   padding: 8px 12px;
-  background-color: #007bff; /* Adjust to match your theme */
+  background-color: #3f0d99; /* Adjust to match your theme */
   color: white;
   border-radius: 0px;
 }

@@ -10,13 +10,8 @@ export default function App() {
       <div className="heading">
         <div className="bg-primary ">Need</div>
         <div className="bg-primary">Parking?</div>
-        <div className="bg-primary">
-          <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer">
-            R1Parkings
-          </a>
-        </div>
+        <div className="bg-primary">R1Parkings</div>
       </div>
     </main>
   );
 }
-

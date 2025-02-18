@@ -16,7 +16,7 @@ import (
 type RfidSensor struct {
 	SensorID    int    `json:"sensor_id"`
 	TagDetected bool   `json:"tag_detected"`
-	TagID       string `json:"tag_id,omitempty"`
+	NumberPlateID       string `json:"name_plate_id,omitempty"`
 }
 
 type SensorData struct {
