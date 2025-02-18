@@ -16,7 +16,7 @@ import (
 type RfidSensor struct {
 	SensorID    int    `json:"sensor_id"`
 	TagDetected bool   `json:"tag_detected"`
-	NumberPlateID       string `json:"name_plate_id,omitempty"`
+	TagID       string `json:"tag_id,omitempty"`
 }
 
 type SensorData struct {
@@ -172,7 +172,7 @@ func main() {
 	// 4. Start HTTP server.
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8000"
 	}
 	log.Printf("HTTP server listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))

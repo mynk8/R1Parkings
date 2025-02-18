@@ -19,8 +19,8 @@ MFRC522 mfrc522[NR_OF_READERS];
 MFRC522::MIFARE_Key key;
 
 // Wi-Fi and WebSocket setup
-const char* ssid = "Arjun";
-const char* password = "9354318837";
+const char* ssid = "nixos-loq";
+const char* password = "teragharjayega";
 WiFiClient wifiClient;
 WebSocketsClient webSocket;
 
