@@ -11,6 +11,7 @@ import {
   SelectValue,
   SelectItem,
 } from "./ui/select";
+
 const mapData = [
   {
     place: "dlf-mall",
@@ -26,6 +27,7 @@ const mapData = [
 export function Overview() {
   const [currentPlace, setCurrentPlace] = useState(mapData[0]);
   const setPlaceAtom = useSetAtom(indexplaceAtom);
+
   return (
     <Card className="flex-grow h-full flex flex-col">
       <Select
@@ -33,8 +35,9 @@ export function Overview() {
         onValueChange={(value) => {
           const selected = mapData.find((item) => item.place === value);
           if (selected) {
+            // Update local state and the atom with the new place.
             setCurrentPlace(selected);
-            setPlaceAtom(() => currentPlace.place);
+            setPlaceAtom(selected.place);
           }
         }}
       >

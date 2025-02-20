@@ -3,70 +3,142 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+    font-family:
+        "IBM Plex Sans",
+        Inter,
+        -apple-system,
+        sans-serif;
+    position: relative;
+}
+
+/* Subtle bottom gradient inspired by Carbon */
+body::after {
+    content: "";
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 200px;
+    background: linear-gradient(to bottom, transparent, rgba(0, 45, 156, 0.05));
+    pointer-events: none;
+    z-index: 0;
 }
 
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
+    :root {
+        /* Carbon-inspired colors */
+        --background: 0 0% 100%;
+        --foreground: 220 100% 10%;
+
+        /* Gray 10 for cards */
+        --card: 220 30% 98%;
+        --card-foreground: 220 100% 10%;
+
+        /* Gray 10 for popovers */
+        --popover: 220 30% 98%;
+        --popover-foreground: 220 100% 10%;
+
+        /* Blue 60 for primary */
+        --primary: 220 100% 45%;
+        --primary-foreground: 0 0% 100%;
+
+        /* Gray 20 for secondary */
+        --secondary: 220 20% 95%;
+        --secondary-foreground: 220 100% 10%;
+
+        /* Gray 20 for muted */
+        --muted: 220 20% 95%;
+        --muted-foreground: 220 10% 40%;
+
+        /* Gray 20 for accent */
+        --accent: 220 20% 95%;
+        --accent-foreground: 220 100% 10%;
+
+        /* Red 60 for destructive */
+        --destructive: 0 100% 40%;
+        --destructive-foreground: 0 0% 100%;
+
+        /* Gray 20 for borders */
+        --border: 220 20% 90%;
+        --input: 220 20% 90%;
+        --ring: 220 100% 45%;
+
+        /* Carbon's data visualization palette */
+        --chart-1: 220 100% 45%; /* Blue 60 */
+        --chart-2: 200 100% 40%; /* Cyan 60 */
+        --chart-3: 270 100% 45%; /* Purple 60 */
+        --chart-4: 96 100% 35%; /* Green 60 */
+        --chart-5: 30 100% 45%; /* Orange 60 */
+
+        --radius: 0; /* Carbon uses sharp corners */
+    }
+
+    .dark {
+        /* Carbon dark theme colors */
+        --background: 220 100% 10%;
+        --foreground: 220 10% 98%;
+
+        /* Gray 90 for cards */
+        --card: 220 20% 15%;
+        --card-foreground: 220 10% 98%;
+
+        /* Gray 90 for popovers */
+        --popover: 220 20% 15%;
+        --popover-foreground: 220 10% 98%;
+
+        /* Blue 40 for primary */
+        --primary: 220 100% 65%;
+        --primary-foreground: 220 100% 10%;
+
+        /* Gray 80 for secondary */
+        --secondary: 220 20% 20%;
+        --secondary-foreground: 220 10% 98%;
+
+        /* Gray 80 for muted */
+        --muted: 220 20% 20%;
+        --muted-foreground: 220 10% 60%;
+
+        /* Gray 80 for accent */
+        --accent: 220 20% 20%;
+        --accent-foreground: 220 10% 98%;
+
+        /* Red 50 for destructive */
+        --destructive: 0 100% 50%;
+        --destructive-foreground: 0 0% 100%;
+
+        /* Gray 70 for borders */
+        --border: 220 20% 25%;
+        --input: 220 20% 25%;
+        --ring: 220 100% 65%;
+
+        /* Carbon dark theme data visualization palette */
+        --chart-1: 220 100% 65%; /* Blue 40 */
+        --chart-2: 200 100% 60%; /* Cyan 40 */
+        --chart-3: 270 100% 65%; /* Purple 40 */
+        --chart-4: 96 100% 55%; /* Green 40 */
+        --chart-5: 30 100% 65%; /* Orange 40 */
+    }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+/* Carbon-style focus states */
+@layer utilities {
+    .focus-ring {
+        @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+    }
+}
+
+/* Carbon-inspired component smooth transitions */
+@layer utilities {
+    .transition-carbon {
+        @apply transition-all duration-110 ease-in-out;
+    }
 }

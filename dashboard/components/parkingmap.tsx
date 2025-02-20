@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { indexplaceAtom } from "@/lib/atom";
+import { useAtomValue } from "jotai";
+import useSWR from "swr";
 
 interface ParkingSpot {
   sensorId: number;
@@ -9,32 +11,19 @@ interface ParkingSpot {
   timestamp: Date;
 }
 
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
 export default function ParkingGrid() {
-  const [spots, setSpots] = useState<ParkingSpot[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const place = useAtomValue(indexplaceAtom);
+  console.log("place", place);
+  // Only fetch if a place is available.
+  const { data: spots, error } = useSWR<ParkingSpot[]>(
+    place ? `/api/parkings?place=${encodeURIComponent(place)}` : null,
+    fetcher,
+    { refreshInterval: 1000 }, // Auto-refresh every second
+  );
 
-  // Function to fetch parking spots
-  const fetchParkingData = async () => {
-    try {
-      const response = await fetch("/api/parkings");
-      if (!response.ok) throw new Error("Failed to fetch parking data");
-
-      const data = await response.json();
-      setSpots(data);
-    } catch (err) {
-      console.error("Error fetching parking data:", err);
-      setError("Failed to fetch parking availability");
-    }
-  };
-
-  // Poll every 5 seconds
-  useEffect(() => {
-    fetchParkingData(); // Initial fetch
-    const interval = setInterval(fetchParkingData, 1000);
-    return () => clearInterval(interval); // Cleanup on unmount
-  }, []);
-
-  if (error) return <div>{error}</div>;
+  if (error) return <div>Failed to fetch parking availability</div>;
   if (!spots) return <div>Loading parking availability...</div>;
 
   const occupiedCount = spots.filter((spot) => spot.tagDetected).length;
@@ -42,14 +31,12 @@ export default function ParkingGrid() {
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* Header */}
       <div className="flex justify-between items-center p-4">
         <h2 className="text-xl font-bold">Parking Availability</h2>
         <div className="text-sm text-gray-600">
           {occupiedCount} of {totalSpots} occupied
         </div>
       </div>
-      {/* Grid Container */}
       <div
         className="grid gap-4"
         style={{

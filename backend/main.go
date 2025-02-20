@@ -266,7 +266,7 @@ func main() {
 	// Start HTTP server
 	go func() {
 		http.HandleFunc("/ws/ingest", handleSensorData)
-		if err := http.ListenAndServe(":8000", nil); err != nil {
+		if err := http.ListenAndServe(":8001", nil); err != nil {
 			log.Fatalf("ListenAndServe error: %v", err)
 		}
 	}()

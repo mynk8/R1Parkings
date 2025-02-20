@@ -5,7 +5,7 @@ import { useAtomValue } from "jotai";
 export async function getParkingAvailabilityByLot(place: string) {
   try {
     const spots = await prisma.parkingSpot.findMany({
-      where: { parkingLotId: "dlf-mall" },
+      where: { parkingLotId: place },
       orderBy: { timestamp: "desc" }, // Get latest timestamps first
       select: {
         sensorId: true,
