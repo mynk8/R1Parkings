@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ParkingLot {
+  id           String        @id @default(cuid())
+  name         String
+  location     String?
+  parkingSpots ParkingSpot[]
+
+  @@map("parking_lots")
+}
+
+model ParkingSpot {
+  id           Int        @id @default(autoincrement())
+  sensorId     Int
+  deviceId     String     @map("device_id")
+  tagDetected  Boolean    @default(false) @map("tag_detected")
+  plateNumber  String?    @map("plate_number")
+  timestamp    DateTime   @default(now())
+  parkingLot   ParkingLot @relation(fields: [parkingLotId], references: [id])
+  parkingLotId String
+
+  @@index([deviceId, sensorId])
+  @@index([timestamp(sort: Desc)])
+  @@map("parking_spots")
+}

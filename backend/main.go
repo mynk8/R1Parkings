@@ -1,179 +1,278 @@
 package main
 
 import (
-	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"sync"
+	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	_ "github.com/lib/pq"
 )
 
-type RfidSensor struct {
+// Global variables
+var (
+	db           *sql.DB
+	parkingLotID string
+	program      *tea.Program
+)
+
+// Data models
+type SensorData struct {
 	SensorID    int    `json:"sensor_id"`
 	TagDetected bool   `json:"tag_detected"`
-	TagID       string `json:"tag_id,omitempty"`
+	PlateNumber string `json:"plate_number"`
 }
 
-type SensorData struct {
+type MessageData struct {
 	DeviceID    string       `json:"device_id"`
-	Timestamp   time.Time    `json:"timestamp"`
-	RfidSensors []RfidSensor `json:"rfid_sensors"`
+	Timestamp   string       `json:"timestamp"`
+	RFIDSensors []SensorData `json:"rfid_sensors"`
 }
 
-// Websocket broadcast hub for live clients
-type Hub struct {
-	clients    map[*websocket.Conn]bool
-	broadcast  chan SensorData
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
-	mu         sync.Mutex
+// TUI model and styles remain unchanged
+type model struct {
+	table         table.Model
+	data          []MessageData
+	connectionMsg string
+	serverStatus  string
 }
 
-func newHub() *Hub {
-	return &Hub{
-		clients:    make(map[*websocket.Conn]bool),
-		broadcast:  make(chan SensorData),
-		register:   make(chan *websocket.Conn),
-		unregister: make(chan *websocket.Conn),
+var (
+	baseStyle = lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("240"))
+
+	headerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("87")).
+			PaddingLeft(1)
+
+	statusBarStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("62")).
+			Foreground(lipgloss.Color("255")).
+			Bold(true).
+			PaddingLeft(1).
+			PaddingRight(1)
+
+	errorStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
+)
+
+func initialModel() model {
+	columns := []table.Column{
+		{Title: "Device ID", Width: 15},
+		{Title: "Timestamp", Width: 20},
+		{Title: "Sensor ID", Width: 10},
+		{Title: "Tag Detected", Width: 12},
+		{Title: "Plate Number", Width: 15},
+	}
+
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(true)
+	t.SetStyles(s)
+
+	return model{
+		table:         t,
+		data:          []MessageData{},
+		connectionMsg: "Server starting...",
+		serverStatus:  "INITIALIZING",
 	}
 }
 
-func (h *Hub) run() {
-	for {
-		select {
-		case conn := <-h.register:
-			h.mu.Lock()
-			h.clients[conn] = true
-			h.mu.Unlock()
-			log.Println("Live client connected to the service")
-		case conn := <-h.unregister:
-			h.mu.Lock()
-			delete(h.clients, conn)
-			h.mu.Unlock()
-			log.Println("Live client disconnected")
-		case data := <-h.broadcast:
-			h.mu.Lock()
-			for client := range h.clients {
-				if err := client.WriteJSON(data); err != nil {
-					log.Printf("Error writing to live client: %v", err)
-					client.Close()
-					delete(h.clients, client)
-				}
+func (m model) Init() tea.Cmd { return nil }
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "q" || msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+	case MessageData:
+		m.data = append(m.data, msg)
+		m.updateTableData()
+		m.serverStatus = "CONNECTED"
+	}
+	m.table, cmd = m.table.Update(msg)
+	return m, cmd
+}
+
+func (m model) View() string {
+	var sb strings.Builder
+	sb.WriteString(headerStyle.Render("RFID Sensor Monitor"))
+	sb.WriteString("\n\n")
+	sb.WriteString(baseStyle.Render(m.table.View()))
+	sb.WriteString("\n\n")
+	status := fmt.Sprintf("Status: %s | Press q to quit", m.serverStatus)
+	sb.WriteString(statusBarStyle.Render(status))
+	return sb.String()
+}
+
+func (m *model) updateTableData() {
+	var rows []table.Row
+	for _, msg := range m.data {
+		for _, sensor := range msg.RFIDSensors {
+			plateNum := sensor.PlateNumber
+			if !sensor.TagDetected {
+				plateNum = "N/A"
 			}
-			h.mu.Unlock()
+			rows = append(rows, table.Row{
+				msg.DeviceID,
+				msg.Timestamp,
+				fmt.Sprintf("%d", sensor.SensorID),
+				fmt.Sprintf("%t", sensor.TagDetected),
+				plateNum,
+			})
 		}
 	}
+	m.table.SetRows(rows)
 }
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
-// sensorIngestHandler now accepts HTTP POST with JSON payload from the ESP32.
-func sensorIngestHandler(dbPool *pgxpool.Pool, hub *Hub, w http.ResponseWriter, r *http.Request) {
+// Updated handleSensorData with response and error aggregation
+func handleSensorData(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var data SensorData
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		http.Error(w, "Bad Request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Insert the sensor data into TimescaleDB.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := insertSensorData(ctx, dbPool, data); err != nil {
-		log.Printf("DB insertion error: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	log.Printf("Stored sensor data from device %s at %s", data.DeviceID, data.Timestamp.Format(time.RFC3339))
-
-	// Broadcast the sensor data to all connected live clients.
-	hub.broadcast <- data
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Data ingested successfully"))
-}
-
-// liveDataHandler remains a websocket endpoint for live updates.
-func liveDataHandler(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("Live WS upgrade error: %v", err)
+		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
-	hub.register <- conn
+	defer r.Body.Close()
 
-	// Keep the connection open until an error occurs.
-	for {
-		if _, _, err := conn.NextReader(); err != nil {
-			hub.unregister <- conn
-			break
+	var data MessageData
+	if err := json.Unmarshal(body, &data); err != nil {
+		http.Error(w, "Error parsing JSON", http.StatusBadRequest)
+		return
+	}
+
+	parsedTime, err := time.Parse(time.RFC3339, data.Timestamp)
+	if err != nil {
+		parsedTime = time.Now()
+	}
+
+	var errors []error
+	for _, sensor := range data.RFIDSensors {
+		// Using the correct column names from the schema
+		_, err := db.Exec(`
+            INSERT INTO parking_spots (
+                device_id,
+                "sensorId",
+                tag_detected,
+                plate_number,
+                timestamp,
+                "parkingLotId"
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+			data.DeviceID,
+			sensor.SensorID,
+			sensor.TagDetected,
+			sql.NullString{
+				String: sensor.PlateNumber,
+				Valid:  sensor.TagDetected && sensor.PlateNumber != "",
+			},
+			parsedTime,
+			parkingLotID,
+		)
+		if err != nil {
+			log.Printf("Error inserting sensor data: %v", err)
+			errors = append(errors, err)
 		}
 	}
+
+	if len(errors) > 0 {
+		http.Error(w, "Failed to insert some sensor data", http.StatusInternalServerError)
+		return
+	}
+
+	program.Send(data)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Data processed successfully"))
 }
 
-func insertSensorData(ctx context.Context, dbPool *pgxpool.Pool, data SensorData) error {
-	query := `
-		INSERT INTO rfid_sensor_data (device_id, sensor_id, tag_detected, tag_id, timestamp)
-		VALUES ($1, $2, $3, $4, $5);
-	`
-	for _, sensor := range data.RfidSensors {
-		if _, err := dbPool.Exec(ctx, query, data.DeviceID, sensor.SensorID, sensor.TagDetected, sensor.TagID, data.Timestamp); err != nil {
-			return err
-		}
+// Check if parking lot exists
+func verifyParkingLotID() error {
+	var exists bool
+	err := db.QueryRow(`
+        SELECT EXISTS (
+            SELECT 1
+            FROM parking_lots
+            WHERE id = $1
+        )
+    `, parkingLotID).Scan(&exists)
+
+	if err != nil {
+		return fmt.Errorf("error checking parking lot existence: %v", err)
+	}
+	if !exists {
+		return fmt.Errorf("parking lot ID %s does not exist in parking_lots table", parkingLotID)
 	}
 	return nil
 }
 
 func main() {
-	// 1. Connect to TimescaleDB.
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		// Replace with your actual connection string.
-		dbURL = "postgres://postgres:password@localhost:5431/postgres?sslmode=disable"
+	// Database connection
+	connStr := os.Getenv("DATABASE_URL")
+	if connStr == "" {
+		log.Fatal("DATABASE_URL environment variable is not set")
 	}
-	dbPool, err := pgxpool.Connect(context.Background(), dbURL)
+	var err error
+	db, err = sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatalf("Unable to connect to TimescaleDB: %v", err)
+		log.Fatalf("Error connecting to database: %v", err)
 	}
-	defer dbPool.Close()
-	log.Println("Connected to TimescaleDB.")
+	defer db.Close()
 
-	// 2. Create and start the WebSocket broadcast hub.
-	hub := newHub()
-	go hub.run()
-
-	// 3. Set up HTTP endpoints.
-	// Endpoint for sensor ingestion (HTTP POST from ESP32).
-	http.HandleFunc("/ws/ingest", func(w http.ResponseWriter, r *http.Request) {
-		sensorIngestHandler(dbPool, hub, w, r)
-	})
-
-	// Endpoint for frontend live updates (WebSocket).
-	http.HandleFunc("/ws/live", func(w http.ResponseWriter, r *http.Request) {
-		liveDataHandler(hub, w, r)
-	})
-
-	// Simple health check / info endpoint.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Backend server running. Connect to /ws/ingest for sensor data and /ws/live for live updates."))
-	})
-
-	// 4. Start HTTP server.
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8000"
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Error pinging database: %v", err)
 	}
-	log.Printf("HTTP server listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+
+	// Parking lot ID
+	parkingLotID = os.Getenv("PARKING_LOT_ID")
+	if parkingLotID == "" {
+		log.Fatal("PARKING_LOT_ID environment variable is not set")
+	}
+
+	// Verify parking lot exists
+	if err := verifyParkingLotID(); err != nil {
+		log.Fatalf("Parking lot verification failed: %v", err)
+	}
+
+	// Initialize TUI
+	p := tea.NewProgram(initialModel())
+	program = p
+
+	// Start HTTP server
+	go func() {
+		http.HandleFunc("/ws/ingest", handleSensorData)
+		if err := http.ListenAndServe(":8000", nil); err != nil {
+			log.Fatalf("ListenAndServe error: %v", err)
+		}
+	}()
+
+	// Run TUI
+	if err := p.Start(); err != nil {
+		log.Fatal(err)
+	}
 }
