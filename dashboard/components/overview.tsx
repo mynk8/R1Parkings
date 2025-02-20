@@ -16,10 +16,12 @@ const mapData = [
   {
     place: "dlf-mall",
     url: "https://www.google.com/maps/embed/v1/search?q=DLF+Mall+of+India,+Sector+18,+Noida,+Uttar+Pradesh,+India&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8",
+    rate: "$5/hr",
   },
   {
     place: "ambience-mall",
     url: "https://www.google.com/maps/embed/v1/place?q=Ambience+Mall,+Vasant+Kunj:+2,+Nelson+Mandela+Marg,+Ambience+Island,+Vasant+Kunj+II,+Vasant+Kunj,+New+Delhi,+Delhi+110070,+India&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8",
+    rate: "$8/hr",
   },
   // ... more map data objects
 ];
@@ -29,7 +31,7 @@ export function Overview() {
   const setPlaceAtom = useSetAtom(indexplaceAtom);
 
   return (
-    <Card className="flex-grow h-full flex flex-col">
+    <Card className="flex-grow h-full flex flex-col p-2">
       <Select
         value={currentPlace.place}
         onValueChange={(value) => {

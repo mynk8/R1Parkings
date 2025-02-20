@@ -1,7 +1,7 @@
 import { atom } from "jotai";
 export const indexplaceAtom = atom<string>("dlf-mall");
 // Atoms for global state
-export const userPlateAtom = atom<string>("");
+export const userPlateAtom = atom<string>("UP14MN9012");
 export const parkingStatusAtom = atom<{
   isParked: boolean;
   timeParked: string;

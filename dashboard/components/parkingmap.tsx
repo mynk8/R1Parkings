@@ -3,6 +3,7 @@
 import { indexplaceAtom } from "@/lib/atom";
 import { useAtomValue } from "jotai";
 import useSWR from "swr";
+import { Badge } from "./ui/badge";
 
 interface ParkingSpot {
   sensorId: number;
@@ -33,9 +34,9 @@ export default function ParkingGrid() {
     <div className="w-full max-w-4xl mx-auto">
       <div className="flex justify-between items-center p-4">
         <h2 className="text-xl font-bold">Parking Availability</h2>
-        <div className="text-sm text-gray-600">
+        <Badge className="text-sm text-gray-100 bg-black">
           {occupiedCount} of {totalSpots} occupied
-        </div>
+        </Badge>
       </div>
       <div
         className="grid gap-4"
@@ -60,10 +61,14 @@ export default function ParkingGrid() {
                 <div className="text-sm font-medium">
                   {spot.plateNumber || "No Plate"}
                 </div>
-                <div className="text-xs text-gray-600">Occupied</div>
+                <Badge className="text-xs text-gray-100 bg-red-600 size-fit">
+                  Occupied
+                </Badge>
               </>
             ) : (
-              <div className="text-sm font-medium">Available</div>
+              <Badge className="text-sm font-medium bg-green-500 size-fit">
+                Available
+              </Badge>
             )}
           </div>
         ))}
